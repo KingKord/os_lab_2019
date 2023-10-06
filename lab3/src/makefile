@@ -17,5 +17,14 @@ utils.o : utils.h
 find_min_max.o : utils.h find_min_max.h
 	$(CC) -o find_min_max.o -c find_min_max.c $(CFLAGS)
 
+make build_bin:
+	$(CC) find_min_max.c parallel_min_max.c utils.c -o task3
+
+make up_by_files: build_bin
+	./task3 --seed 2 --array_size 1000 --pnum 4 --by_files
+
+make up_by_pipes: build_bin
+	./task3 --seed 2 --array_size 1000 --pnum 4
+
 clean :
-	rm utils.o find_min_max.o sequential_min_max parallel_min_max
+	rm utils.o find_min_max.o sequential_min_max parallel_min_max task3
