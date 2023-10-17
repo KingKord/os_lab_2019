@@ -9,18 +9,28 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <signal.h>
 
 #include <getopt.h>
 
 #include "find_min_max.h"
 #include "utils.h"
 
+volatile sig_atomic_t timeout_flag = 0;
+
+void handle_timeout(int signo) {
+    if (signo == SIGALRM) {
+        timeout_flag = 1;
+    }
+}
+
 int main(int argc, char **argv) {
   int seed = -1;
   int array_size = -1;
   int pnum = -1;
   bool with_files = false;
-
+  int timeout = -1; // Инициализируем значение timeout
+  
   while (true) {
     int current_optind = optind ? optind : 1;
 
@@ -28,6 +38,7 @@ int main(int argc, char **argv) {
                                       {"array_size", required_argument, 0, 0},
                                       {"pnum", required_argument, 0, 0},
                                       {"by_files", no_argument, 0, 'f'},
+                                      {"timeout", required_argument, 0, 0}, // Добавляем параметр timeout
                                       {0, 0, 0, 0}};
 
     int option_index = 0;
@@ -68,8 +79,16 @@ int main(int argc, char **argv) {
           case 3:
             with_files = true;
             break;
-
-          defalut:
+          case 4:
+            if (optarg) {
+              timeout = atoi(optarg);
+              if (timeout <= 0) {
+                printf("timeout is a positive number\n");
+                return 1;
+              }
+            }
+            break;
+          default:
             printf("Index %d is out of options\n", option_index);
         }
         break;
@@ -91,8 +110,7 @@ int main(int argc, char **argv) {
   }
 
   if (seed == -1 || array_size == -1 || pnum == -1) {
-    printf("Usage: %s --seed \"num\" --array_size \"num\" --pnum \"num\" \n",
-           argv[0]);
+    printf("Usage: %s --seed \"num\" --array_size \"num\" --pnum \"num\" [--timeout \"num\"]\n", argv[0]);
     return 1;
   }
 
@@ -116,6 +134,14 @@ int main(int argc, char **argv) {
            perror("pipe");
           return 1;
       }
+  }
+
+  // Устанавливаем обработчик сигнала SIGALRM для таймаута
+  signal(SIGALRM, handle_timeout);
+
+  if (timeout > 0) {
+      // Устанавливаем таймер с заданным интервалом
+      alarm(timeout);
   }
 
   for (int i = 0; i < pnum; i++) {
@@ -171,8 +197,17 @@ int main(int argc, char **argv) {
   while (active_child_processes > 0) {
     // your code here
     int status;
-    pid_t finished_pid = wait(&status);
-
+    pid_t finished_pid;
+    if (timeout_flag) {
+        // Если таймаут истек, посылаем сигнал SIGKILL всем дочерним процессам
+        for (int i = 0; i < pnum; i++) {
+            killpg(getpgid(0), SIGKILL);
+        }
+        printf("Timeout exceeded, sending SIGKILL to all child processes\n");
+        break;
+    } else {
+        finished_pid = wait(&status);
+    }
     if (finished_pid > 0) {
         active_child_processes -= 1;
 
@@ -180,6 +215,9 @@ int main(int argc, char **argv) {
             int exit_status = WEXITSTATUS(status);
         }
     } else {
+        if (timeout_flag) {
+            break;
+        }
         perror("wait");
         return 1; 
     }
