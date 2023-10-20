@@ -28,3 +28,6 @@ make up_by_pipes: build_bin
 
 clean :
 	rm utils.o find_min_max.o sequential_min_max parallel_min_max task3
+
+lab4:
+	$(CC) parallel_min_max.c utils.c find_min_max.c  -o lab4-1
