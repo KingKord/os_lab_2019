@@ -18,10 +18,9 @@
 
 volatile sig_atomic_t timeout_flag = 0;
 
-void handle_timeout(int signo) {
-    if (signo == SIGALRM) {
-        timeout_flag = 1;
-    }
+void handle_alarm(int signal) {
+    printf("Timeout exceeded, sending SIGKILL to child processes...\n");
+    kill(0, SIGKILL);
 }
 
 int main(int argc, char **argv) {
@@ -80,12 +79,13 @@ int main(int argc, char **argv) {
             with_files = true;
             break;
           case 4:
-            if (optarg) {
-              timeout = atoi(optarg);
-              if (timeout <= 0) {
-                printf("timeout is a positive number\n");
-                return 1;
-              }
+            if (optarg != NULL) {
+                int timeout = atoi(optarg);
+                if (timeout > 0) {
+                    alarm(timeout);
+                }
+            } else {
+                alarm(10); // default timeout is 10 seconds
             }
             break;
           default:
@@ -137,8 +137,7 @@ int main(int argc, char **argv) {
   }
 
   // Устанавливаем обработчик сигнала SIGALRM для таймаута
-  signal(SIGALRM, handle_timeout);
-
+  signal(SIGALRM, handle_alarm);
   if (timeout > 0) {
       // Устанавливаем таймер с заданным интервалом
       alarm(timeout);
